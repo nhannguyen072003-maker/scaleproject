@@ -199,8 +199,7 @@ measureBtn.addEventListener("click", async function () {
     let message = result.message || "Measurement unavailable.";
 
     if (result.mode === "preview" || result.status === "preview_only") {
-        const area = result.result?.area_cm2 ?? result.area_cm2 ?? 0;
-        message = `Measurement completed. Preview area: ${area.toFixed(2)} cm²`;
+        message = "Preview only: no real measurement was performed in this public deployment.";
     }
 
     resultText.textContent = message;
