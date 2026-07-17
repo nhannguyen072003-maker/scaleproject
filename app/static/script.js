@@ -199,6 +199,10 @@ measureBtn.addEventListener("click", async function () {
 
     resultText.textContent = result.message;
 
-    alert(result.message);
+    if (result.area_cm2 !== undefined) {
+        alert(result.message);
+    } else {
+        alert(result.message);
+    }
 
 });
