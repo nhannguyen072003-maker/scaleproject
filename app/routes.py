@@ -28,27 +28,25 @@ async def calibrate(data: dict = Body(...)):
     except Exception as exc:
         return {"message": f"Calibration backend unavailable: {exc}"}
 
-    points = []
+    try:
+        raw_points = data.get("points", [])
+        if not isinstance(raw_points, list):
+            raise ValueError("Payload must contain a points array")
 
-    for p in data["points"]:
-        points.append([
-            p["x"],
-            p["y"]
-        ])
+        points = []
+        for p in raw_points:
+            if not isinstance(p, dict) or "x" not in p or "y" not in p:
+                raise ValueError("Each point must contain x and y")
+            points.append([float(p["x"]), float(p["y"])])
 
-    if len(points) != 4:
+        if len(points) != 4:
+            return {"message": f"Cần đúng 4 điểm, nhận được {len(points)}."}
 
-        return {
-            "message": f"Cần đúng 4 điểm, nhận được {len(points)}."
-        }
-
-    H = compute(points)
-
-    print(H)
-
-    return {
-        "message": "Calibration Saved!"
-    }
+        H = compute(points)
+        print(H)
+        return {"message": "Calibration Saved!"}
+    except Exception as exc:
+        return {"message": f"Không thể lưu calibration: {exc}"}
 
 
 @router.post("/measure")
