@@ -196,13 +196,13 @@ measureBtn.addEventListener("click", async function () {
     });
 
     const result = await response.json();
+    let message = result.message || "Measurement unavailable.";
 
-    resultText.textContent = result.message;
-
-    if (result.area_cm2 !== undefined) {
-        alert(result.message);
-    } else {
-        alert(result.message);
+    if (result.mode === "preview" || result.status === "preview_only") {
+        message = "Preview-only mode: full measurement is not available in this public deployment. Please use the local app for complete area measurement.";
     }
+
+    resultText.textContent = message;
+    alert(message);
 
 });

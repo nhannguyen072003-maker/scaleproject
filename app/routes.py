@@ -49,15 +49,6 @@ async def calibrate(data: dict = Body(...)):
 
 @router.post("/measure")
 async def measure(file: UploadFile = File(...)):
-    try:
-        from app.state import load_calibration_matrix
-    except Exception as exc:
-        return {"message": f"Measurement backend unavailable: {exc}"}
-
-    H = load_calibration_matrix()
-    if H is None:
-        return {"message": "Chưa calibrate. Vui lòng calibrate trước khi đo."}
-
     print("Received:", file.filename)
 
     try:
@@ -68,6 +59,9 @@ async def measure(file: UploadFile = File(...)):
         return {"message": f"Không đọc được ảnh: {exc}"}
 
     return {
-        "message": "Preview mode: measurement is not available in the public deployment because the image-processing backend requires native libraries that are not supported here.",
+        "message": "Preview-only mode: full measurement is not available in this public deployment. Please use the local app for complete area measurement.",
         "area_cm2": 0.0,
+        "mode": "preview",
+        "status": "preview_only",
+        "detail": "This public deployment does not support the full image-processing measurement backend."
     }
