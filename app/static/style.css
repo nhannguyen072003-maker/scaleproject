@@ -1,0 +1,92 @@
+body{
+    font-family: Arial, sans-serif;
+    margin: 30px;
+}
+
+.image-container{
+
+    position: relative;
+
+    display: inline-block;
+
+    border: 2px solid #666;
+
+}
+
+#preview{
+
+    display: none;
+
+    max-width: 900px;
+
+}
+
+#overlay{
+
+    position:absolute;
+
+    left:0;
+    top:0;
+
+    cursor:crosshair;
+
+}
+
+.marker{
+
+    cursor: pointer;
+
+}
+
+button{
+
+    margin-top: 15px;
+    margin-right: 10px;
+
+    padding: 8px 18px;
+
+    cursor: pointer;
+
+}
+
+#pointText{
+
+    margin-top:20px;
+
+    background:#f4f4f4;
+
+    padding:10px;
+
+    border-radius:6px;
+
+    width:420px;
+
+    white-space:pre-wrap;
+
+}
+
+#productPreview{
+
+    display: none;
+
+    max-width: 400px;
+
+    border: 2px solid #666;
+
+}
+
+#resultText{
+
+    margin-top:20px;
+
+    background:#f4f4f4;
+
+    padding:10px;
+
+    border-radius:6px;
+
+    width:420px;
+
+    white-space:pre-wrap;
+
+}

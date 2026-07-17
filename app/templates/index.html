@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>KOI Leather Calibration</title>
+
+    <link rel="stylesheet" href="/static/style.css">
+
+</head>
+
+<body>
+
+    <h1>KOI LEATHER</h1>
+
+    <h2>Calibration System</h2>
+
+    <input
+        type="file"
+        id="fileInput"
+        accept="image/*">
+
+    <br><br>
+
+    <div class="image-container">
+
+    <img id="preview">
+
+    <canvas id="overlay"></canvas>
+
+</div>
+
+    <br>
+
+    <button id="resetBtn">
+        Reset
+    </button>
+
+    <button id="saveBtn">
+        Save Calibration
+    </button>
+
+    <pre id="pointText">
+Click 4 góc giấy A4
+    </pre>
+
+    <hr>
+
+    <h2>Đo sản phẩm</h2>
+
+    <input
+        type="file"
+        id="productInput"
+        accept="image/*">
+
+    <br><br>
+
+    <img id="productPreview">
+
+    <br>
+
+    <button id="measureBtn">
+        Đo diện tích
+    </button>
+
+    <pre id="resultText"></pre>
+
+    <script src="/static/script.js"></script>
+
+</body>
+
+</html>
