@@ -60,34 +60,16 @@ async def measure(file: UploadFile = File(...)):
     if H is None:
         return {"message": "Chưa calibrate. Vui lòng calibrate trước khi đo."}
 
-    try:
-        import cv2
-        from calibration.leather_detect import compute_area_cm2
-    except Exception as exc:
-        return {"message": f"Measurement backend unavailable: {exc}"}
-
     print("Received:", file.filename)
 
-    contents = await file.read()
-
-    npimg = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-
-    if image is None:
-
-        return {
-            "message": "Không đọc được ảnh, thử lại với file khác."
-        }
-
-    area_cm2 = compute_area_cm2(image, np.array(H, dtype=np.float32))
-
-    if area_cm2 is None:
-
-        return {
-            "message": "Không tìm thấy miếng da trong ảnh. Thử chụp lại với ánh sáng/nền rõ hơn."
-        }
+    try:
+        contents = await file.read()
+        if not contents:
+            return {"message": "Ảnh trống. Vui lòng chọn ảnh khác."}
+    except Exception as exc:
+        return {"message": f"Không đọc được ảnh: {exc}"}
 
     return {
-        "message": f"Diện tích ước tính: {area_cm2:.2f} cm²",
-        "area_cm2": round(area_cm2, 2)
+        "message": "Demo mode: measurement is available in the local app, but the public Vercel preview uses a lightweight placeholder for this feature.",
+        "area_cm2": 0.0,
     }
