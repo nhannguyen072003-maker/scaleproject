@@ -3,8 +3,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import UploadFile, File
 
-import numpy as np
-
 router = APIRouter()
 
 templates = Jinja2Templates(directory="app/templates")
@@ -70,6 +68,6 @@ async def measure(file: UploadFile = File(...)):
         return {"message": f"Không đọc được ảnh: {exc}"}
 
     return {
-        "message": "Demo mode: measurement is available in the local app, but the public Vercel preview uses a lightweight placeholder for this feature.",
+        "message": "Preview mode: measurement is not available in the public deployment because the image-processing backend requires native libraries that are not supported here.",
         "area_cm2": 0.0,
     }
