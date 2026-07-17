@@ -24,8 +24,7 @@ async def home(request: Request):
 @router.post("/calibrate")
 async def calibrate(data: dict = Body(...)):
     try:
-        from app.calibration import compute
-        from calibration.calibration_manager import save_homography
+        from app.homography import compute
     except Exception as exc:
         return {"message": f"Calibration backend unavailable: {exc}"}
 
@@ -44,8 +43,6 @@ async def calibrate(data: dict = Body(...)):
         }
 
     H = compute(points)
-
-    save_homography(H)
 
     print(H)
 
