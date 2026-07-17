@@ -52,8 +52,16 @@ async def calibrate(data: dict = Body(...)):
 @router.post("/measure")
 async def measure(file: UploadFile = File(...)):
     try:
+        from app.state import load_calibration_matrix
+    except Exception as exc:
+        return {"message": f"Measurement backend unavailable: {exc}"}
+
+    H = load_calibration_matrix()
+    if H is None:
+        return {"message": "Chưa calibrate. Vui lòng calibrate trước khi đo."}
+
+    try:
         import cv2
-        from calibration.calibration_manager import load_homography
         from calibration.leather_detect import compute_area_cm2
     except Exception as exc:
         return {"message": f"Measurement backend unavailable: {exc}"}
@@ -71,15 +79,7 @@ async def measure(file: UploadFile = File(...)):
             "message": "Không đọc được ảnh, thử lại với file khác."
         }
 
-    try:
-        H = load_homography()
-    except FileNotFoundError:
-
-        return {
-            "message": "Chưa calibrate. Vui lòng calibrate trước khi đo."
-        }
-
-    area_cm2 = compute_area_cm2(image, H)
+    area_cm2 = compute_area_cm2(image, np.array(H, dtype=np.float32))
 
     if area_cm2 is None:
 

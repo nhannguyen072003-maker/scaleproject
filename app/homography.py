@@ -1,7 +1,6 @@
-import json
-from pathlib import Path
-
 import numpy as np
+
+from app.state import save_calibration_matrix
 
 
 A4_WIDTH = 210
@@ -43,10 +42,5 @@ def compute(points):
         dtype=np.float64,
     )
 
-    output_path = Path(__file__).resolve().parents[1] / "measurement" / "calibration.json"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump({"homography": H.tolist()}, f, indent=4)
-
+    save_calibration_matrix(H)
     return H
