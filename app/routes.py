@@ -2,11 +2,7 @@ from fastapi import APIRouter, Request, Body
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import UploadFile, File
-from app.calibration import compute
-from calibration.calibration_manager import save_homography, load_homography
-from calibration.leather_detect import compute_area_cm2
 
-import cv2
 import numpy as np
 
 router = APIRouter()
@@ -27,6 +23,11 @@ async def home(request: Request):
 
 @router.post("/calibrate")
 async def calibrate(data: dict = Body(...)):
+    try:
+        from app.calibration import compute
+        from calibration.calibration_manager import save_homography
+    except Exception as exc:
+        return {"message": f"Calibration backend unavailable: {exc}"}
 
     points = []
 
@@ -51,8 +52,16 @@ async def calibrate(data: dict = Body(...)):
     return {
         "message": "Calibration Saved!"
     }
+
+
 @router.post("/measure")
 async def measure(file: UploadFile = File(...)):
+    try:
+        import cv2
+        from calibration.calibration_manager import load_homography
+        from calibration.leather_detect import compute_area_cm2
+    except Exception as exc:
+        return {"message": f"Measurement backend unavailable: {exc}"}
 
     print("Received:", file.filename)
 
