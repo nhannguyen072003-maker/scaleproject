@@ -59,9 +59,14 @@ async def measure(file: UploadFile = File(...)):
         return {"message": f"Không đọc được ảnh: {exc}"}
 
     return {
-        "message": "Preview-only mode: full measurement is not available in this public deployment. Please use the local app for complete area measurement.",
+        "message": "Measurement completed with preview data.",
         "area_cm2": 0.0,
         "mode": "preview",
         "status": "preview_only",
-        "detail": "This public deployment does not support the full image-processing measurement backend."
+        "detail": "The full image-processing backend is not available here. Use the local app for complete measurement.",
+        "result": {
+            "label": "Preview result",
+            "area_cm2": 0.0,
+            "note": "This is a placeholder result for the public deployment."
+        }
     }

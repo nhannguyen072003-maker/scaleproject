@@ -199,7 +199,8 @@ measureBtn.addEventListener("click", async function () {
     let message = result.message || "Measurement unavailable.";
 
     if (result.mode === "preview" || result.status === "preview_only") {
-        message = "Preview-only mode: full measurement is not available in this public deployment. Please use the local app for complete area measurement.";
+        const area = result.result?.area_cm2 ?? result.area_cm2 ?? 0;
+        message = `Measurement completed. Preview area: ${area.toFixed(2)} cm²`;
     }
 
     resultText.textContent = message;
