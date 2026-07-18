@@ -23,92 +23,80 @@ def _local_texture_std(gray, k=15):
 
 def find_paper_contour(
     image,
-    std_thresh=18,
-    min_frac=0.005,
-    max_frac=0.6,
-    min_value=170,
-    max_saturation=45
+    min_value=200,
+    max_saturation=60,
+    texture_thresh=14,
+    min_frac=0.003,
+    max_frac=0.5,
+    min_rectangularity=0.80,
+    max_aspect=2.2,
 ):
-    """
-    Tìm vùng tờ giấy tham chiếu (dùng để calibrate / loại trừ khỏi
-    vùng sản phẩm). Trả về convex hull (Nx1x2 int32) hoặc None nếu
-    không tìm thấy.
+    """Locate the A4 reference sheet and return its convex hull.
 
-    Hoạt động tốt cả khi giấy có độ sáng gần giống nền (không phân
-    biệt được bằng ngưỡng độ sáng đơn thuần), miễn giấy "trơn" hơn
-    nền về texture.
+    Returns an ``Nx1x2`` int32 convex hull, or ``None`` when no sufficiently
+    paper-like rectangle is found.
 
-    Chỉ dựa vào texture (độ mượt) là CHƯA ĐỦ — một sản phẩm mượt, đều
-    màu (vd: da thuộc mịn) cũng có thể bị nhận nhầm thành giấy. Vì vậy
-    sau khi tìm được vùng "mượt", cần kiểm tra thêm màu sắc: giấy
-    tham chiếu phải sáng (V cao) và ít bão hòa màu (S thấp) — khác
-    với hầu hết vật liệu/sản phẩm thực tế (da, đá, gỗ...) thường tối
-    hơn hoặc có màu sắc rõ (S cao).
+    A reference sheet has three distinguishing properties versus leather,
+    stone, wood or a marble floor:
+
+    * bright        -> high HSV Value (V)
+    * uncolored     -> low HSV Saturation (S)
+    * smooth        -> low local texture std (no grain / veins)
+
+    We combine all three into a single mask, then keep only the largest
+    blob that is genuinely *rectangular* (fills most of its min-area
+    bounding box) with a plausible A4 aspect ratio (~1.414). The shape gate
+    is important: on a bright marble floor the sheet can bleed into
+    equally-bright floor patches, producing a large but ragged blob — that
+    blob is rejected rather than mis-reported as the sheet, so callers get a
+    trustworthy hull or an honest ``None``.
     """
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    std = _local_texture_std(gray)
-
-    _, edge_mask = cv2.threshold(
-        std, std_thresh, 255, cv2.THRESH_BINARY
-    )
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
-
-    closed = cv2.morphologyEx(
-        edge_mask,
-        cv2.MORPH_CLOSE,
-        kernel,
-        iterations=3
-    )
-
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(
-        closed, connectivity=8
-    )
-
-    if n <= 1:
-        return None
-
-    image_area = image.shape[0] * image.shape[1]
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    # Duyệt các component theo diện tích giảm dần, chọn cái ĐẦU TIÊN
-    # vừa đủ lớn/nhỏ hợp lý, vừa có màu giống giấy (sáng, ít bão hòa).
-    candidates = []
+    std = _local_texture_std(gray)
 
-    for i in range(1, n):
+    paper_like = (
+        (hsv[:, :, 2] >= min_value)
+        & (hsv[:, :, 1] <= max_saturation)
+        & (std < texture_thresh)
+    ).astype(np.uint8) * 255
 
-        area = stats[i, cv2.CC_STAT_AREA]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+    paper_like = cv2.morphologyEx(paper_like, cv2.MORPH_OPEN, kernel, iterations=1)
+    paper_like = cv2.morphologyEx(paper_like, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-        if area < image_area * min_frac:
+    contours, _ = cv2.findContours(
+        paper_like, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    image_area = image.shape[0] * image.shape[1]
+
+    best_hull = None
+    best_area = 0.0
+
+    for contour in contours:
+
+        area = cv2.contourArea(contour)
+
+        if area < image_area * min_frac or area > image_area * max_frac:
             continue
 
-        if area > image_area * max_frac:
+        (_, _), (rw, rh), _ = cv2.minAreaRect(contour)
+
+        if min(rw, rh) == 0:
             continue
 
-        candidates.append((area, i))
+        rectangularity = area / (rw * rh)
+        aspect = max(rw, rh) / min(rw, rh)
 
-    candidates.sort(reverse=True)
-
-    for area, label in candidates:
-
-        mask = (labels == label).astype(np.uint8) * 255
-
-        pts = cv2.findNonZero(mask)
-
-        if pts is None:
+        # Must actually look like a rectangular sheet, not a ragged blob.
+        if rectangularity < min_rectangularity or aspect > max_aspect:
             continue
 
-        hull = cv2.convexHull(pts)
+        if area > best_area:
+            best_area = area
+            best_hull = cv2.convexHull(contour)
 
-        # Kiểm tra màu sắc bên trong hull — phải sáng & ít bão hòa
-        hull_mask = np.zeros(gray.shape, dtype=np.uint8)
-        cv2.drawContours(hull_mask, [hull], -1, 255, -1)
-
-        v_mean = hsv[:, :, 2][hull_mask == 255].mean()
-        s_mean = hsv[:, :, 1][hull_mask == 255].mean()
-
-        if v_mean >= min_value and s_mean <= max_saturation:
-            return hull
-
-    return None
+    return best_hull

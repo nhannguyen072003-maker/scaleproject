@@ -20,6 +20,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
+
 # Test artifacts
 .pytest_cache/
 .coverage
@@ -28,3 +31,8 @@ htmlcov/
 # Local runtime data
 *.log
 measurement/calibration.json
+
+# Debug image output (see calibration/leather_detect.py, KOI_DEBUG)
+debug_*.png
+debug_*.jpg
+koi_debug/

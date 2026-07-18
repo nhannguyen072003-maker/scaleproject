@@ -1,162 +1,299 @@
+import os
+import tempfile
+
 import cv2
 import numpy as np
 
-from calibration.paper_detect import find_paper_contour, _local_texture_std
+from calibration.paper_detect import (
+    find_paper_contour,
+    _local_texture_std,
+)
+
+# ==========================================================
+# Debug image output
+# ==========================================================
+# Writing intermediate images is useful when tuning the pipeline locally, but
+# it must never run on a read-only / serverless filesystem (it would crash) and
+# it should not litter the working directory. Enable it by setting the env var
+# KOI_DEBUG=1; output goes to a temp directory (or KOI_DEBUG_DIR if provided).
+
+_DEBUG = os.environ.get("KOI_DEBUG", "").lower() in ("1", "true", "yes", "on")
+_DEBUG_DIR = os.environ.get("KOI_DEBUG_DIR") or os.path.join(
+    tempfile.gettempdir(), "koi_debug"
+)
 
 
-# =====================================================================
-# Ngưỡng lọc contour ứng viên (tính theo % diện tích ảnh, KHÔNG dùng
-# số pixel cố định như bản cũ — số pixel cố định sẽ sai hoàn toàn khi
-# đổi độ phân giải camera).
-# =====================================================================
+def _debug_write(name, image):
+    """Write a debug image only when debugging is explicitly enabled."""
+    if not _DEBUG:
+        return
+    try:
+        os.makedirs(_DEBUG_DIR, exist_ok=True)
+        cv2.imwrite(os.path.join(_DEBUG_DIR, name), image)
+    except Exception as exc:  # never let debug output break measurement
+        print(f"[WARN] could not write debug image {name}: {exc}")
 
-MIN_AREA_FRAC = 0.03     # bỏ contour nhỏ hơn 3% ảnh (nhiễu)
-MAX_AREA_FRAC = 0.75     # bỏ contour quá lớn (thường là viền ảnh/gradient ánh sáng)
-MIN_SOLIDITY = 0.55      # contour phải "đặc", không rời rạc/lởm chởm
-MAX_BORDER_TOUCH = 2     # chạm >=3/4 cạnh ảnh => coi là nền, không phải vật thể riêng biệt
-MIN_EDGE_STRENGTH = 7.0  # biên phải là biên vật liệu thật, không phải gradient ánh sáng mềm
+# ==========================================================
+# Reference sheet dimensions (A4, millimetres)
+# ==========================================================
 
+A4_WIDTH_MM = 210
+A4_HEIGHT_MM = 297
+
+# Leather-trade unit: 1 "pía" = a 30 x 30 cm square = 900 cm².
+PIA_CM2 = 30 * 30
+
+
+# ==========================================================
+# Candidate filtering thresholds
+# ==========================================================
+
+MIN_AREA_FRAC = 0.03
+MAX_AREA_FRAC = 0.75
+
+MIN_SOLIDITY = 0.55
+MAX_BORDER_TOUCH = 2
+MIN_EDGE_STRENGTH = 7.0
+
+
+# ==========================================================
+# Adaptive Threshold
+# ==========================================================
 
 def _method_adaptive(gray):
-    """Ngưỡng thích ứng — tốt khi ánh sáng không đều trên khung hình."""
 
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (9, 9),
+    )
 
     contours = []
 
     for inv in (True, False):
 
-        mode = cv2.THRESH_BINARY_INV if inv else cv2.THRESH_BINARY
+        mode = (
+            cv2.THRESH_BINARY_INV
+            if inv
+            else cv2.THRESH_BINARY
+        )
 
         th = cv2.adaptiveThreshold(
-            blur, 255,
+            blur,
+            255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             mode,
-            51, 5
+            51,
+            5,
         )
 
-        closed = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel, iterations=2)
-        closed = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel, iterations=1)
+        closed = cv2.morphologyEx(
+            th,
+            cv2.MORPH_CLOSE,
+            kernel,
+            iterations=2,
+        )
+
+        closed = cv2.morphologyEx(
+            closed,
+            cv2.MORPH_OPEN,
+            kernel,
+            iterations=1,
+        )
 
         cnts, _ = cv2.findContours(
-            closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            closed,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
         )
 
-        contours += cnts
+        contours.extend(cnts)
+
+    _debug_write("debug_adaptive.png", closed)
 
     return contours
 
 
+# ==========================================================
+# OTSU
+# ==========================================================
+
 def _method_otsu(gray):
-    """Ngưỡng Otsu toàn cục — tốt khi vật thể và nền có độ sáng khác biệt rõ."""
 
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (9, 9),
+    )
 
     contours = []
 
-    for mode in (cv2.THRESH_BINARY, cv2.THRESH_BINARY_INV):
+    for mode in (
+        cv2.THRESH_BINARY,
+        cv2.THRESH_BINARY_INV,
+    ):
 
-        _, th = cv2.threshold(blur, 0, 255, mode + cv2.THRESH_OTSU)
-
-        closed = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-        cnts, _ = cv2.findContours(
-            closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        _, th = cv2.threshold(
+            blur,
+            0,
+            255,
+            mode + cv2.THRESH_OTSU,
         )
 
-        contours += cnts
+        closed = cv2.morphologyEx(
+            th,
+            cv2.MORPH_CLOSE,
+            kernel,
+            iterations=2,
+        )
+
+        cnts, _ = cv2.findContours(
+            closed,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+
+        contours.extend(cnts)
+
+    _debug_write("debug_otsu.png", closed)
 
     return contours
-
+# ==========================================================
+# CANNY
+# ==========================================================
 
 def _method_canny(gray):
-    """
-    Biên cạnh Canny + morphological close với kernel LỚN để nối liền
-    các đoạn biên bị đứt gãy (bản cũ dùng kernel 5x5 — quá nhỏ, đây là
-    lý do chính khiến bản cũ không tìm thấy contour nào trên ảnh nền
-    có texture, ví dụ đá vân mây).
-    """
 
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    med = float(np.median(blur))
+    med = np.median(blur)
 
-    lower = int(max(0, 0.66 * med))
-    upper = int(min(255, 1.33 * med))
+    lower = int(max(0, med * 0.66))
+    upper = int(min(255, med * 1.33))
 
-    edges = cv2.Canny(blur, lower, upper)
+    edges = cv2.Canny(
+        blur,
+        lower,
+        upper,
+    )
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (15, 15),
+    )
 
-    closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+    closed = cv2.morphologyEx(
+        edges,
+        cv2.MORPH_CLOSE,
+        kernel,
+        iterations=2,
+    )
 
     contours, _ = cv2.findContours(
-        closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        closed,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
     )
+
+    _debug_write("debug_edges.png", closed)
 
     return contours
 
 
-def _border_touch_count(c, h, w, tol=3):
-    """Số cạnh ảnh (trong 4 cạnh) mà contour chạm vào."""
+# ==========================================================
+# Border touch
+# ==========================================================
 
-    x, y, cw, ch = cv2.boundingRect(c)
+def _border_touch_count(contour, h, w, tol=3):
+
+    x, y, cw, ch = cv2.boundingRect(contour)
 
     touches = 0
 
-    touches += x <= tol
-    touches += y <= tol
-    touches += (x + cw) >= (w - tol)
-    touches += (y + ch) >= (h - tol)
+    if x <= tol:
+        touches += 1
+
+    if y <= tol:
+        touches += 1
+
+    if x + cw >= w - tol:
+        touches += 1
+
+    if y + ch >= h - tol:
+        touches += 1
 
     return touches
 
 
-def _edge_strength(c, std_map, h, w, border_tol=3):
-    """
-    Cường độ biên trung bình dọc theo contour, đo bằng bản đồ texture-std
-    cục bộ — phân biệt biên vật liệu thật (giá trị cao, xem paper_detect)
-    với biên "ảo" tạo ra bởi gradient ánh sáng mềm (giá trị thấp).
-    Bỏ qua các điểm nằm sát mép ảnh vì boxFilter cho giá trị không đáng
-    tin cậy ở đó.
-    """
+# ==========================================================
+# Edge strength
+# ==========================================================
 
-    mask = np.zeros(std_map.shape, dtype=np.uint8)
-    cv2.drawContours(mask, [c], -1, 255, 2)
+def _edge_strength(
+    contour,
+    std_map,
+    h,
+    w,
+    border_tol=3,
+):
+
+    mask = np.zeros(
+        std_map.shape,
+        dtype=np.uint8,
+    )
+
+    cv2.drawContours(
+        mask,
+        [contour],
+        -1,
+        255,
+        2,
+    )
 
     ys, xs = np.where(mask == 255)
 
     keep = (
-        (xs > border_tol) & (xs < w - border_tol) &
-        (ys > border_tol) & (ys < h - border_tol)
+        (xs > border_tol)
+        & (xs < w - border_tol)
+        & (ys > border_tol)
+        & (ys < h - border_tol)
     )
 
-    vals = std_map[ys[keep], xs[keep]]
+    vals = std_map[
+        ys[keep],
+        xs[keep],
+    ]
 
     if len(vals) == 0:
         return 0.0
 
     return float(vals.mean())
+# ==========================================================
+# Candidate filtering
+# ==========================================================
 
+def _valid_candidates(
+    contours,
+    image,
+    paper_hull,
+    std_map,
+):
 
-def _valid_candidates(contours, image_shape, paper_hull, std_map):
-    """Lọc + chấm điểm các contour ứng viên, trả về list (area, contour) đã sort giảm dần."""
-
-    h, w = image_shape[:2]
+    h, w = image.shape[:2]
     image_area = h * w
 
-    out = []
+    debug = image.copy()
 
-    for c in contours:
+    candidates = []
 
-        if len(c) < 3:
+    for contour in contours:
+
+        if len(contour) < 3:
             continue
 
-        area = cv2.contourArea(c)
+        area = cv2.contourArea(contour)
 
         if area < image_area * MIN_AREA_FRAC:
             continue
@@ -164,7 +301,8 @@ def _valid_candidates(contours, image_shape, paper_hull, std_map):
         if area > image_area * MAX_AREA_FRAC:
             continue
 
-        hull = cv2.convexHull(c)
+        hull = cv2.convexHull(contour)
+
         hull_area = cv2.contourArea(hull)
 
         if hull_area <= 0:
@@ -175,96 +313,153 @@ def _valid_candidates(contours, image_shape, paper_hull, std_map):
         if solidity < MIN_SOLIDITY:
             continue
 
-        # Contour chạm >=3 cạnh ảnh => giống nền/gradient ánh sáng hơn
-        # là 1 vật thể riêng biệt đặt trên nền.
-        if _border_touch_count(c, h, w) > MAX_BORDER_TOUCH:
+        if _border_touch_count(contour, h, w) > MAX_BORDER_TOUCH:
             continue
 
-        # Biên phải là biên vật liệu thật, không phải do gradient ánh
-        # sáng mềm bị Otsu/adaptive threshold "cắt" nhầm thành contour.
-        if _edge_strength(c, std_map, h, w) < MIN_EDGE_STRENGTH:
+        edge = _edge_strength(
+            contour,
+            std_map,
+            h,
+            w,
+        )
+
+        if edge < MIN_EDGE_STRENGTH:
             continue
 
-        # Bỏ ứng viên trùng vào vùng tờ giấy tham chiếu
         if paper_hull is not None:
 
-            M = cv2.moments(c)
+            M = cv2.moments(contour)
 
             if M["m00"] != 0:
 
                 cx = M["m10"] / M["m00"]
                 cy = M["m01"] / M["m00"]
 
-                if cv2.pointPolygonTest(paper_hull, (cx, cy), False) >= 0:
+                if cv2.pointPolygonTest(
+                    paper_hull,
+                    (cx, cy),
+                    False,
+                ) >= 0:
                     continue
 
-        out.append((area, c))
+        candidates.append((area, contour))
 
-    out.sort(key=lambda t: t[0], reverse=True)
+        cv2.drawContours(
+            debug,
+            [contour],
+            -1,
+            (0, 255, 0),
+            3,
+        )
 
-    return out
+    _debug_write("debug_candidates.jpg", debug)
 
+    candidates.sort(
+        key=lambda x: x[0],
+        reverse=True,
+    )
+
+    return candidates
+
+
+# ==========================================================
+# Find product contour
+# ==========================================================
 
 def find_product_contour(image):
-    """
-    Tìm vùng sản phẩm cần đo. Chiến lược 2 tầng:
 
-    1) SEGMENTED: thử nhiều phương pháp threshold/edge khác nhau để
-       tìm 1 contour "đặc", tách biệt khỏi nền — dùng khi sản phẩm
-       nằm gọn trên nền tương phản (vd: da đặt trên nền khác màu).
+    gray = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2GRAY,
+    )
 
-    2) FULL_FRAME (fallback): nếu không phương pháp nào cho ra contour
-       hợp lệ — thường xảy ra khi sản phẩm chiếm gần hết khung hình và
-       không có đường biên khép kín rõ ràng (vd: chụp cận 1 tấm đá lớn,
-       biên chỉ là các đường ron/grout bị cắt bởi mép ảnh) — coi TOÀN
-       BỘ khung hình là sản phẩm, trừ đi vùng tờ giấy tham chiếu (nếu có).
-       Cách này giả định camera cố định (rig/copy-stand) giữa lúc
-       calibrate và lúc đo, giống như toàn bộ thiết kế hệ thống hiện tại
-       (dùng chung 1 ma trận homography cho mọi ảnh đo).
-
-    Trả về (contour, mode, paper_hull) với mode in {"segmented", "full_frame"}.
-    """
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    paper_hull = find_paper_contour(image)
     std_map = _local_texture_std(gray)
 
-    all_contours = []
-    all_contours += _method_adaptive(gray)
-    all_contours += _method_otsu(gray)
-    all_contours += _method_canny(gray)
+    paper_hull = find_paper_contour(image)
 
-    candidates = _valid_candidates(all_contours, image.shape, paper_hull, std_map)
+    contours = []
 
-    if candidates:
+    contours.extend(_method_adaptive(gray))
+    contours.extend(_method_otsu(gray))
+    contours.extend(_method_canny(gray))
 
-        _, best_contour = candidates[0]
+    candidates = _valid_candidates(
+        contours,
+        image,
+        paper_hull,
+        std_map,
+    )
 
-        return best_contour, "segmented", paper_hull
+    if len(candidates) > 0:
 
-    # ---- Fallback: toàn khung hình trừ vùng giấy ----
+        area, contour = candidates[0]
+
+        print(f"[INFO] segmented contour area = {area:.0f}")
+
+        return contour, "segmented", paper_hull
+
+    print("[INFO] fallback full frame")
 
     h, w = image.shape[:2]
 
-    margin = max(1, int(0.005 * min(h, w)))
+    margin = max(
+        1,
+        int(min(h, w) * 0.005),
+    )
 
-    frame = np.array([
-        [[margin, margin]],
-        [[w - 1 - margin, margin]],
-        [[w - 1 - margin, h - 1 - margin]],
-        [[margin, h - 1 - margin]]
-    ], dtype=np.int32)
+    frame = np.array(
+        [
+            [[margin, margin]],
+            [[w - margin, margin]],
+            [[w - margin, h - margin]],
+            [[margin, h - margin]],
+        ],
+        dtype=np.int32,
+    )
 
     return frame, "full_frame", paper_hull
 
 
-def compute_area_cm2(image, H):
+# ==========================================================
+# Compute Area  (measurement engine — source of truth)
+# ==========================================================
 
+def compute_area_cm2(image, H):
     contour, mode, paper_hull = find_product_contour(image)
 
     if contour is None:
+        print("[ERROR] No contour detected.")
         return None
+
+    # ------------------------------------------------------
+    # DEBUG: contour được chọn
+    # ------------------------------------------------------
+
+    debug = image.copy()
+
+    cv2.drawContours(
+        debug,
+        [contour],
+        -1,
+        (0, 255, 0),
+        5,
+    )
+
+    if paper_hull is not None:
+
+        cv2.drawContours(
+            debug,
+            [paper_hull],
+            -1,
+            (255, 0, 0),
+            3,
+        )
+
+    _debug_write("debug_contour.jpg", debug)
+
+    # ------------------------------------------------------
+    # Transform contour into real-world millimetres via the homography
+    # ------------------------------------------------------
 
     pts = contour.reshape(-1, 1, 2).astype(np.float32)
 
@@ -272,18 +467,63 @@ def compute_area_cm2(image, H):
 
     area_mm2 = cv2.contourArea(real_pts)
 
-    # Ở chế độ full_frame, trừ đi diện tích tờ giấy tham chiếu
-    # (giấy không phải là 1 phần của sản phẩm).
-    if mode == "full_frame" and paper_hull is not None:
+    # Real-world bounding size — a robust, tape-measurable sanity check.
+    flat = real_pts.reshape(-1, 2)
+    width_mm = float(flat[:, 0].max() - flat[:, 0].min())
+    height_mm = float(flat[:, 1].max() - flat[:, 1].min())
+
+    # ------------------------------------------------------
+    # Optional A4 self-check: re-measure the reference sheet through the
+    # same homography and compare against its known area. Only runs when the
+    # sheet was confidently detected.
+    # ------------------------------------------------------
+
+    paper_check = None
+
+    if paper_hull is not None:
 
         paper_pts = paper_hull.reshape(-1, 1, 2).astype(np.float32)
-
         real_paper = cv2.perspectiveTransform(paper_pts, H)
+        paper_area = cv2.contourArea(real_paper)
 
-        paper_area_mm2 = cv2.contourArea(real_paper)
+        expected = float(A4_WIDTH_MM * A4_HEIGHT_MM)
+        error_pct = abs(paper_area - expected) / expected * 100.0
 
-        area_mm2 = max(area_mm2 - paper_area_mm2, 0)
+        paper_check = {
+            "measured_cm2": round(paper_area / 100.0, 1),
+            "expected_cm2": round(expected / 100.0, 1),
+            "error_pct": round(error_pct, 1),
+        }
 
-    print(f"[leather_detect] mode={mode} area_mm2={area_mm2:.1f}")
+        print("--------------------------------")
+        print("PAPER AREA (mm²):", paper_area)
+        print("EXPECTED A4    :", expected)
+        print("A4 CHECK error :", f"{error_pct:.1f}%")
+        print("--------------------------------")
 
-    return area_mm2 / 100
+        # In the full-frame fallback the contour is the whole image, so the
+        # visible reference sheet is part of that area and must be removed.
+        if mode == "full_frame":
+            area_mm2 = max(area_mm2 - paper_area, 0)
+
+    area_cm2 = area_mm2 / 100.0
+
+    result = {
+        "area_cm2": round(area_cm2, 1),
+        "area_dm2": round(area_cm2 / 100.0, 2),
+        "area_m2": round(area_cm2 / 10000.0, 3),
+        "area_sqft": round(area_cm2 / 929.0304, 2),
+        "area_pia": round(area_cm2 / PIA_CM2, 2),
+        "width_cm": round(width_mm / 10.0, 1),
+        "height_cm": round(height_mm / 10.0, 1),
+        "detection_mode": mode,
+        "paper_check": paper_check,
+    }
+
+    print("--------------------------------")
+    print("MODE       :", mode)
+    print("AREA cm²   :", result["area_cm2"])
+    print("SIZE (cm)  :", result["width_cm"], "x", result["height_cm"])
+    print("--------------------------------")
+
+    return result

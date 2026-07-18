@@ -3,84 +3,90 @@ import cv2
 
 ROOT = Path(__file__).resolve().parent.parent
 
-IMAGE = ROOT / "images" / "calibration" / "calibration.jpg"
 
-image = cv2.imread(str(IMAGE))
+def main():
+    IMAGE = ROOT / "images" / "calibration" / "calibration.jpg"
 
-gray = cv2.cvtColor(
-    image,
-    cv2.COLOR_BGR2GRAY
-)
+    image = cv2.imread(str(IMAGE))
 
-blur = cv2.GaussianBlur(
-    gray,
-    (5,5),
-    0
-)
+    gray = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2GRAY
+    )
 
-_, binary = cv2.threshold(
-    blur,
-    200,
-    255,
-    cv2.THRESH_BINARY
-)
+    blur = cv2.GaussianBlur(
+        gray,
+        (5,5),
+        0
+    )
 
-cv2.imshow("Binary", binary)
+    _, binary = cv2.threshold(
+        blur,
+        200,
+        255,
+        cv2.THRESH_BINARY
+    )
 
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-kernel = cv2.getStructuringElement(
-    cv2.MORPH_RECT,
-    (5,5)
-)
+    cv2.imshow("Binary", binary)
 
-binary = cv2.morphologyEx(
-    binary,
-    cv2.MORPH_OPEN,
-    kernel
-)
-contours, _ = cv2.findContours(
-    binary,
-    cv2.RETR_EXTERNAL,
-    cv2.CHAIN_APPROX_SIMPLE
-)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (5,5)
+    )
 
-print(len(contours))
-output = image.copy()
+    binary = cv2.morphologyEx(
+        binary,
+        cv2.MORPH_OPEN,
+        kernel
+    )
+    contours, _ = cv2.findContours(
+        binary,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
 
-cv2.drawContours(
-    output,
-    contours,
-    -1,
-    (0,255,0),
-    2
-)
+    print(len(contours))
+    output = image.copy()
 
-cv2.imshow(
-    "Contours",
-    output
-)
-largest = max(
-    contours,
-    key=cv2.contourArea
-)
+    cv2.drawContours(
+        output,
+        contours,
+        -1,
+        (0,255,0),
+        2
+    )
 
-print(cv2.contourArea(largest))
-x,y,w,h = cv2.boundingRect(
-    largest
-)
+    cv2.imshow(
+        "Contours",
+        output
+    )
+    largest = max(
+        contours,
+        key=cv2.contourArea
+    )
 
-result = image.copy()
+    print(cv2.contourArea(largest))
+    x,y,w,h = cv2.boundingRect(
+        largest
+    )
 
-cv2.rectangle(
-    result,
-    (x,y),
-    (x+w,y+h),
-    (0,0,255),
-    2
-)
+    result = image.copy()
 
-cv2.imshow(
-    "Largest",
-    result
-)
+    cv2.rectangle(
+        result,
+        (x,y),
+        (x+w,y+h),
+        (0,0,255),
+        2
+    )
+
+    cv2.imshow(
+        "Largest",
+        result
+    )
+
+
+if __name__ == "__main__":
+    main()

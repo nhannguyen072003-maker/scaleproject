@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 import numpy as np
 
@@ -11,37 +12,25 @@ def get_calibration_path():
 
 
 def save_homography(H):
-
-    data = {
-
-        "homography": H.tolist()
-
-    }
+    """Atomically save homography H (numpy array) to calibration JSON."""
+    data = {"homography": H.tolist()}
 
     CALIBRATION_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(
-        CALIBRATION_FILE,
-        "w"
-    ) as f:
+    # Write to a temp file in same directory then atomically replace
+    dirpath = str(CALIBRATION_FILE.parent)
+    with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False, encoding="utf-8") as tf:
+        json.dump(data, tf, indent=4)
+        tf.flush()
+        tempname = tf.name
 
-        json.dump(
-            data,
-            f,
-            indent=4
-        )
+    # Atomic replace
+    os.replace(tempname, str(CALIBRATION_FILE))
 
 
 def load_homography():
-
-    with open(
-        CALIBRATION_FILE,
-        "r"
-    ) as f:
-
+    """Load homography from calibration file. Raises FileNotFoundError if missing."""
+    with open(CALIBRATION_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    return np.array(
-        data["homography"],
-        dtype=np.float32
-    )
+    return np.array(data["homography"], dtype=np.float32)

@@ -4,70 +4,182 @@
 <head>
 
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>KOI Leather Calibration</title>
+    <title>KOI Leather · Area Measurement</title>
 
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=4">
 
 </head>
 
 <body>
 
-    <h1>KOI LEATHER</h1>
+    <div class="page">
 
-    <h2>Calibration System</h2>
+        <header class="hero">
+            <div class="hero-inner">
+                <div class="brand">
+                    <div class="brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 7l4-4 5 3 5-3 4 4-3 4 3 4-4 4-5-3-5 3-4-4 3-4z"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <h1>KOI LEATHER</h1>
+                        <p class="tagline">Leather Area Measurement System</p>
+                    </div>
+                </div>
+                <div class="hero-meta">
+                    <span class="pill">A4-referenced</span>
+                    <span class="pill">computer vision</span>
+                </div>
+            </div>
+        </header>
 
-    <input
-        type="file"
-        id="fileInput"
-        accept="image/*">
+        <main class="container">
 
-    <br><br>
+            <!-- ========================= STEP 1 ========================= -->
+            <section class="card reveal">
 
-    <div class="image-container">
+                <div class="card-head">
+                    <span class="step">1</span>
+                    <div>
+                        <h2>Calibration</h2>
+                        <p class="sub">Load the A4 photo, then click its four corners
+                            to lock the scale.</p>
+                    </div>
+                </div>
 
-    <img id="preview">
+                <div class="card-body">
 
-    <canvas id="overlay"></canvas>
+                    <label class="uploader" for="fileInput">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span id="fileName">Choose calibration photo</span>
+                    </label>
+                    <input type="file" id="fileInput" accept="image/*" hidden>
 
-</div>
+                    <div class="image-container" id="calibStage">
+                        <img id="preview" alt="calibration preview">
+                        <canvas id="overlay"></canvas>
+                        <div class="stage-hint" id="stageHint">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                                 stroke="currentColor" stroke-width="1.6">
+                                <rect x="4" y="3" width="16" height="18" rx="1"/>
+                            </svg>
+                            Click the 4 corners of the A4 sheet
+                        </div>
+                    </div>
 
-    <br>
+                    <div class="points-row">
+                        <div class="points-progress">
+                            <span class="dot" data-i="0"></span>
+                            <span class="dot" data-i="1"></span>
+                            <span class="dot" data-i="2"></span>
+                            <span class="dot" data-i="3"></span>
+                        </div>
+                        <span id="pointStatus" class="points-status">0 / 4 corners</span>
+                    </div>
+                    <pre id="pointText" hidden></pre>
 
-    <button id="resetBtn">
-        Reset
-    </button>
+                    <div class="btn-row">
+                        <button id="resetBtn" class="btn ghost">Reset</button>
+                        <button id="saveBtn" class="btn primary">Save Calibration</button>
+                    </div>
 
-    <button id="saveBtn">
-        Save Calibration
-    </button>
+                </div>
+            </section>
 
-    <pre id="pointText">
-Click 4 góc giấy A4
-    </pre>
+            <!-- ========================= STEP 2 ========================= -->
+            <section class="card reveal">
 
-    <hr>
+                <div class="card-head">
+                    <span class="step">2</span>
+                    <div>
+                        <h2>Đo diện tích <span class="head-en">· Measure</span></h2>
+                        <p class="sub">Upload a product photo with the A4 sheet in frame,
+                            then measure.</p>
+                    </div>
+                </div>
 
-    <h2>Đo sản phẩm</h2>
+                <div class="card-body">
 
-    <input
-        type="file"
-        id="productInput"
-        accept="image/*">
+                    <label class="uploader" for="productInput">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="9" cy="9" r="2"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                        <span id="productName">Choose product photo</span>
+                    </label>
+                    <input type="file" id="productInput" accept="image/*" hidden>
 
-    <br><br>
+                    <img id="productPreview" alt="product preview">
 
-    <img id="productPreview">
+                    <button id="measureBtn" class="btn primary big">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 12l4-4 4 4 4-4 4 4 4-4"/>
+                            <path d="M2 18l4-4 4 4 4-4 4 4 4-4"/>
+                        </svg>
+                        Đo diện tích
+                    </button>
 
-    <br>
+                    <div id="result" class="result-card">
+                        <p class="result-hint">Your measurement will appear here.</p>
+                    </div>
 
-    <button id="measureBtn">
-        Đo diện tích
-    </button>
+                </div>
+            </section>
 
-    <pre id="resultText">Measurement is preview-only in this public deployment.</pre>
+        </main>
 
-    <script src="/static/script.js"></script>
+        <section class="viz-section" id="vizCard" hidden>
+            <div class="card">
+                <div class="card-head">
+                    <span class="step">3</span>
+                    <div>
+                        <h2>Visualization <span class="head-en">· A4 coverage</span></h2>
+                        <p class="sub">How the measured area is built up from A4 sheets.
+                            The area itself is still measured directly — the tiles only
+                            explain the result.</p>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <div class="tabs" id="vizTabs">
+                        <button type="button" class="tab" data-stage="original">Original</button>
+                        <button type="button" class="tab" data-stage="contour">Contour</button>
+                        <button type="button" class="tab" data-stage="a4_layout">A4 Layout</button>
+                        <button type="button" class="tab active" data-stage="coverage">Coverage</button>
+                    </div>
+
+                    <div class="viz-stage">
+                        <img id="vizImage" alt="visualization stage">
+                    </div>
+
+                    <div class="viz-summary" id="vizSummary"></div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="foot">
+            KOI Leather · A4-referenced computer-vision measurement
+        </footer>
+
+    </div>
+
+    <script src="/static/script.js?v=4"></script>
 
 </body>
 
